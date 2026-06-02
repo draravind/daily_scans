@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "daily-scans"
+version = "0.1.0"
+description = "Pure-compute daily technical scans (cores, filters, post-processors) for equity universes."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Aravind V" }]
+dependencies = ["pandas", "numpy", "TA-Lib"]   # IO-free → no pyarrow
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["daily_scans"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
