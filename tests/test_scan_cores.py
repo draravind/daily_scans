@@ -720,7 +720,12 @@ class TestBaseBreakout:
         df.iloc[100, df.columns.get_loc('high')] = 105.0
         df.iloc[199, df.columns.get_loc('high')] = 106.0
         result = sc.base_breakout('X', _pack('X', df))
-        assert result == ('X', 99, df.index[100], 105.0)
+        assert result["stock"] == 'X'
+        assert result["base_length"] == 99
+        assert result["pivot_date"] == df.index[100]
+        assert result["pivot_price"] == 105.0
+        assert result["breakout_date"] == df.index[199]
+        assert result["base_low"] == pytest.approx(99.9, abs=0.01)
 
     def test_unconfirmable_pivot_too_close_to_end(self):
         """Pivot at index 185 cannot be confirmed (needs 21 right bars after it)."""
@@ -794,9 +799,10 @@ class TestBaseBreakout:
         df.iloc[197, df.columns.get_loc('high')] = 106.0
         result = sc.base_breakout('X', _pack('X', df))
         assert result is not None
-        assert result[1] == 97
-        assert result[2] == df.index[100]
-        assert result[3] == 105.0
+        assert result["base_length"] == 97
+        assert result["pivot_date"] == df.index[100]
+        assert result["pivot_price"] == 105.0
+        assert result["breakout_date"] == df.index[197]
 
     def test_history_beyond_lookback_ignored(self):
         """Confirmable pivots whose bar index falls before the trailing 1260-bar window are ignored."""
@@ -807,8 +813,8 @@ class TestBaseBreakout:
         df.iloc[1399, df.columns.get_loc('high')] = 106.0
         result = sc.base_breakout('X', _pack('X', df))
         assert result is not None
-        assert result[3] == 105.0
-        assert result[2] == df.index[200]
+        assert result["pivot_price"] == 105.0
+        assert result["pivot_date"] == df.index[200]
 
     def test_highest_ceiling_wins_when_multiple_break(self):
         """When multiple ceilings break in the recent window, the highest wins."""
@@ -819,8 +825,8 @@ class TestBaseBreakout:
         df.iloc[299, df.columns.get_loc('high')] = 111.0  # clears both inside recent window
         result = sc.base_breakout('X', _pack('X', df))
         assert result is not None
-        assert result[3] == 110.0
-        assert result[2] == df.index[100]
+        assert result["pivot_price"] == 110.0
+        assert result["pivot_date"] == df.index[100]
 
     def test_insufficient_history_returns_none(self):
         """Need at least left + right + 2 = 87 bars."""
@@ -835,20 +841,28 @@ class TestBaseBreakout:
         df.iloc[64, df.columns.get_loc('high')] = 105.0
         df.iloc[86, df.columns.get_loc('high')] = 106.0
         result = sc.base_breakout('X', _pack('X', df))
-        assert result == ('X', 22, df.index[64], 105.0)
+        assert result["stock"] == 'X'
+        assert result["base_length"] == 22
+        assert result["pivot_date"] == df.index[64]
+        assert result["pivot_price"] == 105.0
+        assert result["breakout_date"] == df.index[86]
 
     def test_return_shape(self):
-        """Valid breakout returns a 4-tuple with the documented types."""
+        """Valid breakout returns a dict with the documented keys and types."""
         n = 200
         df = _make_flat_ohlcv(n, close=100.0)
         df.iloc[100, df.columns.get_loc('high')] = 105.0
         df.iloc[199, df.columns.get_loc('high')] = 106.0
         result = sc.base_breakout('X', _pack('X', df))
         assert result is not None
-        assert len(result) == 4
-        assert isinstance(result[0], str)
-        assert isinstance(result[1], int)
-        assert isinstance(result[3], float)
+        assert set(result) == {
+            "stock", "base_length", "pivot_date", "pivot_price",
+            "breakout_date", "base_low",
+        }
+        assert isinstance(result["stock"], str)
+        assert isinstance(result["base_length"], int)
+        assert isinstance(result["pivot_price"], float)
+        assert isinstance(result["base_low"], float)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

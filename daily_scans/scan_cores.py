@@ -1109,8 +1109,9 @@ def base_breakout(stock, data_dict, ctx=None):
     When multiple ceilings break inside the recent window, the one with the
     highest pivot_price wins.
 
-    Returns (stock, base_days, pivot_date, pivot_price) or None.
-        base_days = breakout_idx - pivot_idx (>= RIGHT_BARS + 1).
+    Returns a dict {stock, base_length, pivot_date, pivot_price, breakout_date,
+    base_low} or None. base_length = breakout_idx - pivot_idx (>= RIGHT_BARS + 1);
+    base_low = lowest low over the inclusive base window (pivot → breakout).
     """
     data = data_dict[stock]
     highs = data['high'].values
@@ -1152,7 +1153,16 @@ def base_breakout(stock, data_dict, ctx=None):
 
     pivot_price, pivot_idx, breakout_idx = best
     base_length = breakout_idx - pivot_idx
-    return (stock, int(base_length), data.index[pivot_idx], pivot_price)
+    lows = data['low'].values
+    base_low = float(lows[pivot_idx:breakout_idx + 1].min())
+    return {
+        "stock": stock,
+        "base_length": int(base_length),
+        "pivot_date": data.index[pivot_idx],
+        "pivot_price": float(pivot_price),
+        "breakout_date": data.index[breakout_idx],
+        "base_low": base_low,
+    }
 
 
 def cup_with_handle(stock, data_dict, ctx=None):

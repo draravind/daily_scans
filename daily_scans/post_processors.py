@@ -148,10 +148,14 @@ def highest_turnover_pp(rows):
 def base_breakouts_pp(rows):
     if not rows:
         return []
-    rows = sorted(rows, key=lambda x: x[1], reverse=True)
-    symbols = [r[0] for r in rows]
+    rows = sorted(rows, key=lambda r: r["base_length"], reverse=True)
+    symbols = [r["stock"] for r in rows]
     extras = {
-        r[0]: {"base_days": r[1], "pivot_date": r[2], "pivot_price": r[3]}
+        r["stock"]: {
+            "base_days": r["base_length"],
+            "pivot_date": r["pivot_date"],
+            "pivot_price": r["pivot_price"],
+        }
         for r in rows
     }
     return symbols, extras
