@@ -1008,6 +1008,49 @@ _BASE_BREAKOUT_RECENT_WINDOW = 5     # ~1 week breakout window
 _BASE_BREAKOUT_LOOKBACK_DAYS = 1260  # ~5 years
 
 
+_RS_HIGH_BASE_WINDOW = 252        # ~52 weeks: base for the "new high" comparison
+_RS_HIGH_RECENCY_WINDOW = 5       # last N bars = recency window (spec: 5-day lookback)
+_RS_HIGH_MAX_PRICE_GAP = 0.15     # price must be within 15% below its prior high
+
+
+def rs_high_before_price_high(stock, data_dict, ctx=None):
+    """RS line (close / benchmark_close) set a new 252-day high within the last 5 bars
+    while price did NOT (price topped earlier and is now within 15% below that high).
+
+    Reads the abstract benchmark close series from `ctx.benchmark_close` (set by the
+    repo). Returns the symbol on trigger, else None.
+    """
+    ctx = _ctx(ctx)
+    benchmark_close = ctx.benchmark_close
+    if benchmark_close is None:
+        return None
+
+    close = data_dict[stock]['close']
+    # Align benchmark to the stock's dates; keep only days both have a bar (>0).
+    aligned = pd.DataFrame({
+        'close': close,
+        'bench': benchmark_close.reindex(close.index),
+    }).dropna()
+    aligned = aligned[aligned['bench'] > 0]
+    if len(aligned) < _RS_HIGH_BASE_WINDOW:
+        return None
+
+    window = aligned.iloc[-_RS_HIGH_BASE_WINDOW:]
+    price = window['close'].values
+    rs = (window['close'] / window['bench']).values
+    recency = _RS_HIGH_RECENCY_WINDOW
+
+    rs_high_recent = rs[-recency:].max() >= rs.max()          # RS new high in last 5 bars
+    price_no_new_high = price[-recency:].max() < price.max()  # price did NOT in last 5 bars
+
+    price_high = price.max()
+    gap = (price_high - price[-1]) / price_high               # >0 ⟺ current below prior high
+
+    if rs_high_recent and price_no_new_high and 0 < gap <= _RS_HIGH_MAX_PRICE_GAP:
+        return stock
+    return None
+
+
 _TURNOVER_LOOKBACKS = {'is_3m': 63, 'is_6m': 126, 'is_1y': 252, 'is_ath': 500}
 
 def highest_turnover(stock, data_dict, ctx=None):

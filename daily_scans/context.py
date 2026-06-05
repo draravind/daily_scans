@@ -17,6 +17,9 @@ class ScanContext:
     pivot — the package never knows the benchmark is Nifty."""
     today: dt.date
     rs_anchor: tuple[dt.date, float] | None = None   # (pivot_date, benchmark_close_at_pivot)
+    # Abstract benchmark close series (date-indexed, python dates), set by the repo.
+    # The package never knows WHICH index — same neutrality contract as rs_anchor.
+    benchmark_close: "pd.Series | None" = None
 
 
 @dataclass(frozen=True)

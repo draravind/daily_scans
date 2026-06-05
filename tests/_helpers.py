@@ -92,6 +92,34 @@ def _make_nifty_with_pivot(n_warmup=160, n_pre=170, n_post=80, base=15000.0, pea
     })
 
 
+def _make_rs_lead_case(total=260, symbol='X', start_date='2023-01-02'):
+    """Stock + benchmark where the RS line (close / benchmark) makes a fresh
+    252-day high inside the last 5 bars while price topped ~8 bars earlier and
+    now sits ~5% below that high.
+
+    Returns (stock_df, benchmark_close_series) — both indexed by python dates.
+    """
+    dates = pd.bdate_range(start_date, periods=total)
+
+    closes = np.empty(total)
+    peak_idx = total - 9                          # price high ~8 bars before the end
+    closes[:peak_idx + 1] = np.linspace(100.0, 200.0, peak_idx + 1)
+    closes[peak_idx + 1:] = np.linspace(200.0, 190.0, total - peak_idx - 1)
+
+    # Benchmark tracks the stock (flat RS) until the recency window, then drops in
+    # the last 5 bars so close/benchmark sets its max on the final bar.
+    bench = closes * 0.5
+    bench[total - 5:] = np.linspace(bench[total - 6], bench[total - 6] * 0.8, 5)
+
+    df = pd.DataFrame({
+        'open': closes, 'high': closes * 1.01, 'low': closes * 0.99,
+        'close': closes, 'volume': 200_000,
+    }, index=dates)
+    df.index = df.index.date
+    bench_series = pd.Series(bench, index=df.index)
+    return df, bench_series
+
+
 # India liquidity thresholds, mirrored here so package tests can exercise
 # common_filters with realistic numbers without depending on any repo.
 def _india_like_config():

@@ -18,7 +18,7 @@ import pytest
 from daily_scans import scan_cores as sc
 from daily_scans.context import ScanContext
 
-from _helpers import _make_ohlcv, _make_flat_ohlcv, _pack
+from _helpers import _make_ohlcv, _make_flat_ohlcv, _pack, _make_rs_lead_case
 
 # Fixed today for the today-sensitive ATH cores (replaces the old calendar
 # freeze). Use a Timestamp so `ctx.today - timedelta` compares against the test
@@ -377,8 +377,10 @@ class TestEpisodicPivots:
         # Tight low → close lands in top 25% of day's range (canonical Bonde).
         df.iloc[-1, df.columns.get_loc('low')] = gap_open * 0.999
         # Volume ≥ 2× SMA(volume, 50) (canonical Bonde EP volume gate).
+        # Cast to int: `volume` is an int64 column and modern pandas refuses a
+        # silent float→int truncation on scalar assignment.
         avg_vol = df['volume'].iloc[-50:].mean()
-        df.iloc[-1, df.columns.get_loc('volume')] = avg_vol * 3
+        df.iloc[-1, df.columns.get_loc('volume')] = int(avg_vol * 3)
         result = sc.episodic_pivots('X', _pack('X', df))
         assert result == 'X'
 
@@ -1377,3 +1379,85 @@ class TestRelativeStrengthBenchmarkPivotScore:
         old_pivot = dt.date(2024, 1, 1)
         ctx = ScanContext(today=dt.date(2025, 6, 15), rs_anchor=(old_pivot, 100.0))
         assert sc.relative_strength_benchmark_pivot_score('X', _pack('X', df), ctx) is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# rs_high_before_price_high
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestRsHighBeforePriceHigh:
+    def test_trigger_returns_symbol(self):
+        """RS makes a new 252-day high in the last 5 bars while price topped earlier
+        and sits within 15% below — returns the symbol."""
+        df, bench = _make_rs_lead_case()
+        ctx = ScanContext(today=dt.date(2025, 6, 15), benchmark_close=bench)
+        assert sc.rs_high_before_price_high('X', _pack('X', df), ctx) == 'X'
+
+    def test_no_benchmark_returns_none(self):
+        """benchmark_close unset (and ctx=None) makes the core no-op -> None."""
+        df, _ = _make_rs_lead_case()
+        ctx = ScanContext(today=dt.date(2025, 6, 15))
+        assert sc.rs_high_before_price_high('X', _pack('X', df), ctx) is None
+        assert sc.rs_high_before_price_high('X', _pack('X', df), None) is None
+
+    def test_insufficient_history_returns_none(self):
+        """Fewer than 252 aligned bars -> None."""
+        df, bench = _make_rs_lead_case(total=200)
+        ctx = ScanContext(today=dt.date(2025, 6, 15), benchmark_close=bench)
+        assert sc.rs_high_before_price_high('X', _pack('X', df), ctx) is None
+
+    def test_price_already_new_high_returns_none(self):
+        """Price makes its 252-day high on the last bar -> price_no_new_high fails -> None."""
+        total = 260
+        dates = pd.bdate_range('2023-01-02', periods=total)
+        closes = np.linspace(100.0, 200.0, total)          # price peak on the last bar
+        bench = closes * 0.5
+        bench[-5:] = np.linspace(bench[-6], bench[-6] * 0.8, 5)
+        df = pd.DataFrame({
+            'open': closes, 'high': closes * 1.01, 'low': closes * 0.99,
+            'close': closes, 'volume': 200_000,
+        }, index=dates)
+        df.index = df.index.date
+        bench_s = pd.Series(bench, index=df.index)
+        ctx = ScanContext(today=dt.date(2025, 6, 15), benchmark_close=bench_s)
+        assert sc.rs_high_before_price_high('X', _pack('X', df), ctx) is None
+
+    def test_stale_rs_high_returns_none(self):
+        """RS line peaked mid-window and is now falling -> rs_high_recent fails -> None."""
+        total = 260
+        dates = pd.bdate_range('2023-01-02', periods=total)
+        closes = np.empty(total)
+        peak_idx = total - 9
+        closes[:peak_idx + 1] = np.linspace(100.0, 200.0, peak_idx + 1)
+        closes[peak_idx + 1:] = np.linspace(200.0, 190.0, total - peak_idx - 1)
+        # Benchmark dips sharply mid-window (RS spikes there) then recovers, so the
+        # RS max sits far from the recency window.
+        bench = closes * 0.5
+        bench[130] = bench[130] * 0.25
+        df = pd.DataFrame({
+            'open': closes, 'high': closes * 1.01, 'low': closes * 0.99,
+            'close': closes, 'volume': 200_000,
+        }, index=dates)
+        df.index = df.index.date
+        bench_s = pd.Series(bench, index=df.index)
+        ctx = ScanContext(today=dt.date(2025, 6, 15), benchmark_close=bench_s)
+        assert sc.rs_high_before_price_high('X', _pack('X', df), ctx) is None
+
+    def test_gap_too_wide_returns_none(self):
+        """Current price more than 15% below its prior high -> gap gate fails -> None."""
+        total = 260
+        dates = pd.bdate_range('2023-01-02', periods=total)
+        closes = np.empty(total)
+        peak_idx = total - 9
+        closes[:peak_idx + 1] = np.linspace(100.0, 200.0, peak_idx + 1)
+        closes[peak_idx + 1:] = np.linspace(200.0, 160.0, total - peak_idx - 1)  # ~20% below
+        bench = closes * 0.5
+        bench[-5:] = np.linspace(bench[-6], bench[-6] * 0.7, 5)  # keep RS high in last 5
+        df = pd.DataFrame({
+            'open': closes, 'high': closes * 1.01, 'low': closes * 0.99,
+            'close': closes, 'volume': 200_000,
+        }, index=dates)
+        df.index = df.index.date
+        bench_s = pd.Series(bench, index=df.index)
+        ctx = ScanContext(today=dt.date(2025, 6, 15), benchmark_close=bench_s)
+        assert sc.rs_high_before_price_high('X', _pack('X', df), ctx) is None

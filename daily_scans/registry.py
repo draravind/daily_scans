@@ -51,6 +51,8 @@ ALL_SCANS: dict[str, ScanDef] = {
     "top_movers": ScanDef(scan_cores.top_movers, post_processors.top_movers_pp),
     "unusual_volume": ScanDef(scan_cores.unusual_volume, post_processors.unusual_volume_pp),
     "consolidation_breakout": ScanDef(scan_cores.consolidation_breakout, post_processors.consolidation_breakout_pp),
+    "rs_high_before_price_high": ScanDef(
+        scan_cores.rs_high_before_price_high, post_processors.identity_pp),
 }
 
 
