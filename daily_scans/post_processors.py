@@ -193,3 +193,18 @@ def consolidation_breakout_pp(rows):
     symbols = [r[0] for r in rows]
     extras = {r[0]: {"consolidation_days": r[1]} for r in rows}
     return symbols, extras
+
+
+def consolidation_pp(rows):
+    if not rows:
+        return []
+    rows = sorted(rows, key=lambda r: r["tightness"])  # ascending: tightest first
+    symbols = [r["stock"] for r in rows]
+    extras = {
+        r["stock"]: {
+            "consolidation_days": r["consolidation_days"],
+            "tightness": round(float(r["tightness"]), 4),
+        }
+        for r in rows
+    }
+    return symbols, extras

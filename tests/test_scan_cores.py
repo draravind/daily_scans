@@ -1461,3 +1461,19 @@ class TestRsHighBeforePriceHigh:
         bench_s = pd.Series(bench, index=df.index)
         ctx = ScanContext(today=dt.date(2025, 6, 15), benchmark_close=bench_s)
         assert sc.rs_high_before_price_high('X', _pack('X', df), ctx) is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# consolidation (compression scan) — deterministic guard branches
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestConsolidation:
+    def test_insufficient_bars_returns_none(self):
+        """Fewer than 250 bars -> None before any indicator math."""
+        df = _make_ohlcv(200, seed=1)
+        assert sc.consolidation('X', _pack('X', df)) is None
+
+    def test_below_ema200_returns_none(self):
+        """A steadily declining series keeps recent closes under EMA200 -> None."""
+        df = _make_ohlcv(300, daily_return=-0.004, seed=2)
+        assert sc.consolidation('X', _pack('X', df)) is None

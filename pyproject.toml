@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "daily-scans"
 version = "0.2.0"
 description = "Pure-compute daily technical scans (cores, filters, post-processors) for equity universes."
-readme = "README.md"
+readme = "CLAUDE.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Aravind V" }]

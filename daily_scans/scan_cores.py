@@ -1564,6 +1564,24 @@ def volume_breakout(stock, data_dict, ctx=None):
     return None
 
 
+def _detect_consolidation(data, atr_price, min_length, end_offset=0):
+    """Longest tight ATR window scanning 15..min_length bars, longest-first.
+
+    Returns (length, high, low, tightness) for the first qualifying window, else None.
+    end_offset=0 ends the window at the last bar (incl. today); end_offset=1 ends it at
+    the prior bar (excl. today). tightness = window range / threshold (< 1.0 when tight).
+    """
+    upper = len(data) - end_offset
+    for length in range(15, min_length - 1, -1):
+        window = data.iloc[upper - length:upper]
+        w_high = window['high'].max()
+        w_low = window['low'].min()
+        threshold = 2.0 * (length / 15.0) ** 0.5 * atr_price
+        if (w_high - w_low) < threshold:
+            return length, float(w_high), float(w_low), float((w_high - w_low) / threshold)
+    return None
+
+
 def consolidation_breakout(stock, data_dict, ctx=None):
     """Breakout from a tight 3-15 day consolidation range in a stacked-EMA uptrend.
     Returns (stock, consolidation_days)."""
@@ -1588,26 +1606,15 @@ def consolidation_breakout(stock, data_dict, ctx=None):
     if atr <= 0:
         return None
 
-    best_length = 0
-    for length in range(15, 2, -1):
-        window = data.iloc[-length - 1:-1]
-        range_size = window['high'].max() - window['low'].min()
-        tight_threshold = 2.0 * (length / 15.0) ** 0.5 * atr
-        if range_size < tight_threshold:
-            best_length = length
-            break
-
-    if best_length < 3:
+    hit = _detect_consolidation(data, atr, min_length=3, end_offset=1)
+    if hit is None:
         return None
+    best_length, range_high, _low, _tightness = hit
 
-    consol_window = data.iloc[-best_length - 1:-1]
-    range_high = consol_window['high'].max()
     if data['close'].iloc[-1] <= range_high:
         return None
-
     if data['volume'].iloc[-1] <= 1.5 * data['vol_sma'].iloc[-1]:
         return None
-
     return (stock, best_length)
 
 
@@ -1617,13 +1624,13 @@ def consolidation_breakout(stock, data_dict, ctx=None):
 
 
 def consolidation(stock, data_dict, ctx=None):
-    """Detect a tight consolidation window using a combined ATR + historical-rank score.
+    """Detect a tight consolidation window using a length-scaled ATR-tightness test.
 
     Returns a dict with marker geometry when a qualifying window exists,
     else None.
     """
     data = data_dict[stock].copy()
-    if data.shape[0] < 414:
+    if data.shape[0] < 250:
         return None
     data['EMA_200'] = talib.EMA(data['close'], 200)
     data['TR'] = talib.ATR(data['high'], data['low'], data['close'], 1) / data['close']
@@ -1636,37 +1643,20 @@ def consolidation(stock, data_dict, ctx=None):
     if atr_price <= 0:
         return None
 
-    for length in range(15, 4, -1):
-        window = data.iloc[-length:]
-        w_high = window['high'].max()
-        w_low = window['low'].min()
-        w_range = w_high - w_low
-        ceiling = 2.0 * (length / 15.0) ** 0.5 * atr_price
-        score_atr = w_range / ceiling
-
-        roll_range = (
-            data['high'].rolling(length).max()
-            - data['low'].rolling(length).min()
-        )
-        roll_mean = data['close'].rolling(length).mean()
-        coeff_series = (roll_range / roll_mean).iloc[-400:]
-        score_hist = (coeff_series < coeff_series.iloc[-1]).mean()
-
-        score = score_atr + score_hist
-        if score < 1.0:
-            return {
-                'stock': stock,
-                'consolidation_days': length,
-                'combined_score': float(score),
-                'score_atr': float(score_atr),
-                'score_hist': float(score_hist),
-                'start_date': window.index[0],
-                'end_date': window.index[-1],
-                'range_high': float(w_high),
-                'range_low': float(w_low),
-            }
-
-    return None
+    hit = _detect_consolidation(data, atr_price, min_length=4, end_offset=0)
+    if hit is None:
+        return None
+    length, w_high, w_low, tightness = hit
+    window = data.iloc[-length:]
+    return {
+        'stock': stock,
+        'consolidation_days': length,
+        'tightness': tightness,
+        'start_date': window.index[0],
+        'end_date': window.index[-1],
+        'range_high': w_high,
+        'range_low': w_low,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

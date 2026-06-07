@@ -9,8 +9,14 @@ from daily_scans import (
     run_scans_on_batch, finalize, build_batch_data_dict,
     common_filters,
 )
+from daily_scans import registry
 
 from _helpers import _make_ohlcv, _india_like_config
+
+
+class TestRegistryCoverage:
+    def test_consolidation_registered(self):
+        assert "consolidation" in registry.ALL_SCANS
 
 
 CFG = _india_like_config()

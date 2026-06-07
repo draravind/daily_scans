@@ -165,3 +165,39 @@ class TestRelativeStrengthBenchmarkPivotPP:
         assert len(symbols) == 200
         assert symbols[0] == 'S0499'
         assert symbols[-1] == 'S0300'
+
+
+# ── consolidation_pp (direct) ────────────────────────────────────────────────
+
+class TestConsolidationPP:
+    def test_empty_rows_returns_empty_list(self):
+        assert post_processors.consolidation_pp([]) == []
+
+    def test_returns_tuple_with_extras(self):
+        rows = [
+            {'stock': 'A', 'consolidation_days': 10, 'tightness': 0.30},
+            {'stock': 'B', 'consolidation_days': 6, 'tightness': 0.10},
+        ]
+        result = post_processors.consolidation_pp(rows)
+        assert isinstance(result, tuple)
+        symbols, extras = result
+        assert isinstance(symbols, list)
+        assert isinstance(extras, dict)
+        for sym in symbols:
+            assert set(extras[sym].keys()) == {'consolidation_days', 'tightness'}
+
+    def test_sorted_by_tightness_ascending(self):
+        rows = [
+            {'stock': 'LOOSE', 'consolidation_days': 8, 'tightness': 0.90},
+            {'stock': 'TIGHT', 'consolidation_days': 5, 'tightness': 0.05},
+            {'stock': 'MID', 'consolidation_days': 7, 'tightness': 0.40},
+        ]
+        symbols, _ = post_processors.consolidation_pp(rows)
+        assert symbols == ['TIGHT', 'MID', 'LOOSE']
+
+    def test_extras_carry_days_and_tightness(self):
+        rows = [{'stock': 'A', 'consolidation_days': 12, 'tightness': 0.123456}]
+        symbols, extras = post_processors.consolidation_pp(rows)
+        assert symbols == ['A']
+        assert extras['A']['consolidation_days'] == 12
+        assert extras['A']['tightness'] == 0.1235  # rounded to 4 dp
