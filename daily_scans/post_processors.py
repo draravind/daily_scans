@@ -7,7 +7,9 @@ import pandas as pd
 
 
 def identity_pp(rows):
-    return rows
+    # Tolerant: scans that emit geometry now return dict rows {stock, ...}; the
+    # screening output stays a symbol list. Bare-string scans pass through.
+    return [r['stock'] if isinstance(r, dict) else r for r in rows]
 
 
 def pullback_to_ema_pp(rows):

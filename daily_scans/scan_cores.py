@@ -1135,7 +1135,15 @@ def gapups(stock, data_dict, ctx=None):
     condition_2 = data['low'].iloc[gapup_ix:].min() >= data['low'].iloc[gapup_ix]
 
     if condition_1 and condition_2:
-        return stock
+        return {
+            'stock': stock,
+            'gap_date': data.index[gapup_ix],
+            'prev_high': float(data['high'].iloc[gapup_ix - 1]),
+            'gap_low': float(data['low'].iloc[gapup_ix]),
+            'gap_pct': round(
+                (data['low'].iloc[gapup_ix] / data['high'].iloc[gapup_ix - 1] - 1) * 100, 2
+            ),
+        }
     return None
 
 
@@ -1367,7 +1375,19 @@ def golden_cross(stock, data_dict, ctx=None):
     # Recently crossed: EMA50 was <= EMA200 within last 5 bars
     if not any(data['EMA_50'].iloc[i] <= data['EMA_200'].iloc[i] for i in range(-6, -1)):
         return None
-    return stock
+    # Derive the cross bar: the LAST recent bar where EMA50 was still <= EMA200;
+    # the cross is the next bar (lands in [-5, -1]) — marks the most-recent cross.
+    cross_ix = None
+    for i in range(-6, -1):
+        if data['EMA_50'].iloc[i] <= data['EMA_200'].iloc[i]:
+            cross_ix = i + 1
+    if cross_ix is None:
+        return None
+    return {
+        'stock': stock,
+        'cross_date': data.index[cross_ix],
+        'cross_price': float(data['EMA_200'].iloc[cross_ix]),
+    }
 
 
 def macd_bullish_crossover(stock, data_dict, ctx=None):
@@ -1523,7 +1543,12 @@ def narrow_range(stock, data_dict, ctx=None):
     today_range = data['day_range'].iloc[-1]
     prior_ranges = data['day_range'].iloc[-7:-1]
     if today_range < prior_ranges.min():
-        return stock
+        return {
+            'stock': stock,
+            'event_date': data.index[-1],
+            'bar_high': float(data['high'].iloc[-1]),
+            'bar_low': float(data['low'].iloc[-1]),
+        }
     return None
 
 
@@ -1560,7 +1585,12 @@ def volume_breakout(stock, data_dict, ctx=None):
         bullish = data['close'].iloc[i] > data['open'].iloc[i]
         significant = (data['close'].iloc[i] - data['open'].iloc[i]) / data['open'].iloc[i] > data['ATR'].iloc[i]
         if vol_spike and bullish and significant:
-            return stock
+            return {
+                'stock': stock,
+                'event_date': data.index[i],
+                'anchor_low': float(data['low'].iloc[i]),
+                'volume_ratio': round(float(data['volume'].iloc[i] / data['vol_sma'].iloc[i]), 1),
+            }
     return None
 
 
@@ -1687,7 +1717,12 @@ def volume_dryup(stock, data_dict, ctx=None):
     if data['volume'].iloc[-1] >= 0.5 * data['vol_sma'].iloc[-1]:
         return None
 
-    return stock
+    return {
+        'stock': stock,
+        'event_date': data.index[-1],
+        'anchor_low': float(data['low'].iloc[-1]),
+        'volume_ratio': round(float(data['volume'].iloc[-1] / data['vol_sma'].iloc[-1]), 1),
+    }
 
 
 def unusual_volume(stock, data_dict, ctx=None):
@@ -1707,7 +1742,12 @@ def unusual_volume(stock, data_dict, ctx=None):
         small_candle = abs(data['close'].iloc[i] - data['open'].iloc[i]) / data['close'].iloc[i] < data['ATR'].iloc[i]
         if vol_spike and small_candle:
             ratio = round(float(data['volume'].iloc[i] / data['vol_sma'].iloc[i]), 1)
-            return {'stock': stock, 'volume_ratio': ratio}
+            return {
+                'stock': stock,
+                'event_date': data.index[i],
+                'anchor_low': float(data['low'].iloc[i]),
+                'volume_ratio': ratio,
+            }
     return None
 
 
@@ -1727,7 +1767,15 @@ def inside_day(stock, data_dict, ctx=None):
         return None
 
     if data['high'].iloc[-1] <= data['high'].iloc[-2] and data['low'].iloc[-1] >= data['low'].iloc[-2]:
-        return stock
+        return {
+            'stock': stock,
+            'inside_date': data.index[-1],
+            'inside_high': float(data['high'].iloc[-1]),
+            'inside_low': float(data['low'].iloc[-1]),
+            'mother_date': data.index[-2],
+            'mother_high': float(data['high'].iloc[-2]),
+            'mother_low': float(data['low'].iloc[-2]),
+        }
     return None
 
 
@@ -1768,7 +1816,11 @@ def pocket_pivot(stock, data_dict, ctx=None):
     if not near_ema:
         return None
 
-    return stock
+    return {
+        'stock': stock,
+        'event_date': data.index[-1],
+        'anchor_low': float(data['low'].iloc[-1]),
+    }
 
 
 def pullback_to_ema(stock, data_dict, ctx=None):
@@ -1799,7 +1851,12 @@ def pullback_to_ema(stock, data_dict, ctx=None):
     for label, col in ema_levels:
         ema_val = data[col].iloc[-1]
         if abs(low - ema_val) <= atr_dist and close > ema_val:
-            return {'stock': stock, 'ema_level': label}
+            return {
+                'stock': stock,
+                'event_date': data.index[-1],
+                'ema_value': float(ema_val),
+                'ema_level': label,
+            }
 
     return None
 

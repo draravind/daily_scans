@@ -707,7 +707,7 @@ class TestGapups:
             df.iloc[i, df.columns.get_loc('high')] = gap_close * 1.02
             df.iloc[i, df.columns.get_loc('open')] = gap_close
         result = sc.gapups('X', _pack('X', df))
-        assert result is None or result == 'X'
+        assert result is None or (isinstance(result, dict) and result['stock'] == 'X')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1081,7 +1081,7 @@ class TestNarrowRange:
             df.iloc[i, df.columns.get_loc('high')] = df['close'].iloc[i] * 1.03
             df.iloc[i, df.columns.get_loc('low')] = df['close'].iloc[i] * 0.97
         result = sc.narrow_range('X', _pack('X', df))
-        assert result is None or result == 'X'
+        assert result is None or (isinstance(result, dict) and result['stock'] == 'X')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1125,7 +1125,7 @@ class TestVolumeBreakout:
         """Normal volume → no 3x spike → None."""
         df = _make_ohlcv(400, daily_return=0.003, volatility=0.02, seed=1)
         result = sc.volume_breakout('X', _pack('X', df))
-        assert result is None or result == 'X'
+        assert result is None or (isinstance(result, dict) and result['stock'] == 'X')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1255,7 +1255,7 @@ class TestInsideDay:
         # Ensure today's high < yesterday's high and today's low > yesterday's low
         if df['high'].iloc[-1] <= df['high'].iloc[-2] and df['low'].iloc[-1] >= df['low'].iloc[-2]:
             result = sc.inside_day('X', _pack('X', df))
-            assert result is None or result == 'X'
+            assert result is None or (isinstance(result, dict) and result['stock'] == 'X')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
